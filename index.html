@@ -183,7 +183,8 @@
   .tombol:hover svg{transform:translateX(4px)}
   .tombol:active{transform:translateY(0) scale(.985)}
   .tombol:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
-  .tombol[disabled]{filter:grayscale(.55);opacity:.6;cursor:not-allowed;box-shadow:none;transform:none}
+  .tombol[disabled]{filter:grayscale(.4);opacity:.7;cursor:progress;box-shadow:none;transform:none}
+  .tombol[data-siap="0"]{filter:saturate(.75)}
   .tombol[data-sibuk="1"]{cursor:progress}
   @media (min-width:46rem){.tombol{width:auto}}
 
@@ -193,22 +194,56 @@
   }
   .catatan b{color:var(--ink)}
 
-  /* --- pesan --- */
-  .pesan{
-    margin-top:1.5rem;padding:1rem 1.125rem;border-radius:var(--r-m);
-    font-size:.9375rem;background:var(--paper-2);
-    border-left:4px solid var(--pb);
-    animation:masuk .45s var(--lentur);
+  /* --- notifikasi --- */
+  .notif{
+    display:flex;gap:.95rem;margin-top:1.5rem;
+    padding:1.1rem 1.2rem;border-radius:var(--r-m);background:#fff;
+    border:1px solid var(--rule);border-left-width:4px;
+    box-shadow:var(--bayang);animation:masuk .45s var(--lentur);
   }
-  .pesan[hidden]{display:none}
-  .pesan b{
-    display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem;
-    font-family:var(--mono);font-size:.6875rem;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--pb);
+  .notif[hidden]{display:none}
+  .notif[data-nada="galat"]{border-left-color:var(--pb)}
+  .notif[data-nada="awas"]{border-left-color:#B07D12}
+  .notif[data-nada="info"]{border-left-color:var(--pa)}
+
+  .notif__ikon{
+    flex:none;width:2.25rem;height:2.25rem;border-radius:50%;
+    display:grid;place-items:center;
+    animation:masukIkon .5s var(--lentur) .06s both;
+  }
+  @keyframes masukIkon{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+  .notif[data-nada="galat"] .notif__ikon{background:#F6E4E0;color:var(--pb)}
+  .notif[data-nada="awas"] .notif__ikon{background:#FBEFD3;color:#8A6209}
+  .notif[data-nada="info"] .notif__ikon{background:#DFEDEC;color:var(--pa)}
+
+  .notif__isi{min-width:0}
+  .notif__judul{
+    margin:0 0 .3rem;font-family:var(--disp);font-variation-settings:"wdth" 102;
+    font-weight:700;font-size:1.02rem;letter-spacing:-.01em;color:var(--ink);
+  }
+  .notif__teks{margin:0;font-size:.9375rem;color:var(--soft);line-height:1.6}
+
+  .notif__aksi{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.95rem}
+  .notif__aksi a,.notif__aksi button{
+    display:inline-flex;align-items:center;gap:.45rem;
+    padding:.55rem 1rem;border-radius:999px;text-decoration:none;cursor:pointer;
+    font-family:var(--mono);font-size:.625rem;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;
+    border:1.5px solid var(--rule);color:var(--ink);background:#fff;
+    transition:transform .18s var(--lentur),border-color .18s,color .18s;
+  }
+  .notif__aksi a:hover,.notif__aksi button:hover{transform:translateY(-2px);border-color:var(--pa);color:var(--pa)}
+  .notif__aksi .wa{position:static;box-shadow:none;background:var(--hijau);color:#fff;border-color:transparent}
+  .notif__aksi .wa:hover{background:#178644;color:#fff;border-color:transparent}
+
+  .notif__teknis{
+    margin:.85rem 0 0;padding:.55rem .7rem;border-radius:var(--r-s);
+    background:var(--paper-2);font-family:var(--mono);font-size:.625rem;
+    line-height:1.6;color:#7E8F93;word-break:break-word;
   }
   @keyframes masuk{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 
-  .pilihan{list-style:none;margin:.9rem 0 0;padding:0;display:grid;gap:.45rem}
+  .pilihan{list-style:none;margin:.95rem 0 0;padding:0;display:grid;gap:.45rem}
   .pilihan button{
     display:flex;align-items:center;justify-content:space-between;gap:.75rem;
     width:100%;text-align:left;padding:.7rem .95rem;border-radius:var(--r-s);
@@ -221,9 +256,6 @@
   /* ================= HASIL ================= */
   #hasil[hidden]{display:none}
   .lapis{opacity:0;transform:translateY(16px);animation:naik .7s var(--lentur) forwards}
-  .lapis--1{animation-delay:.04s}
-  .lapis--2{animation-delay:.14s}
-  .lapis--3{animation-delay:.24s}
 
   .hasil__kepala{
     padding:var(--pad);border-top:1px solid var(--rule);
@@ -364,14 +396,136 @@
   }
   @keyframes berputar{to{transform:rotate(360deg)}}
 
+  /* ================= ANIMASI INTERAKTIF ================= */
+
+  /* bilah kemajuan saat mengambil data */
+  .bilah{
+    position:fixed;top:0;left:0;height:3px;width:0;z-index:80;
+    background:linear-gradient(90deg,var(--emas),var(--emas-2));
+    box-shadow:0 0 12px rgba(242,169,59,.8);
+    transition:width .5s ease,opacity .4s ease;opacity:0;
+  }
+  .bilah[data-jalan="1"]{opacity:1}
+
+  /* goyangan sebagai umpan balik kesalahan */
+  @keyframes goyang{
+    0%,100%{transform:translateX(0)}
+    15%{transform:translateX(-7px)}
+    30%{transform:translateX(6px)}
+    45%{transform:translateX(-4px)}
+    60%{transform:translateX(3px)}
+    80%{transform:translateX(-1px)}
+  }
+  .goyang{animation:goyang .5s var(--lentur)}
+
+  /* denyar saat kotak digit terisi */
+  @keyframes pop{
+    0%{transform:scale(1)}
+    45%{transform:scale(1.12)}
+    100%{transform:scale(1)}
+  }
+  .digit input[data-baru="1"]{animation:pop .32s var(--lentur)}
+
+  /* riak pada tombol utama */
+  .tombol{isolation:isolate}
+  .riak{
+    position:absolute;border-radius:50%;pointer-events:none;
+    background:rgba(255,255,255,.55);transform:translate(-50%,-50%) scale(0);
+    animation:riak .6s ease-out forwards;
+  }
+  @keyframes riak{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
+
+  /* cahaya mengikuti kursor pada kartu */
+  @media (hover:hover){
+    .kartu::after{
+      content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+      border-radius:inherit;opacity:0;transition:opacity .4s ease;
+      background:radial-gradient(20rem 20rem at var(--mx,50%) var(--my,0%),
+        rgba(242,169,59,.13),transparent 70%);
+    }
+    .kartu[data-sorot="1"]::after{opacity:1}
+  }
+  .cari,#hasil{position:relative;z-index:1}
+
+  /* huruf tipe muncul satu per satu, lalu disapu cahaya emas */
+  .lencana{position:relative;overflow:hidden}
+  .lencana b{display:inline-flex;gap:.06em}
+  .lencana b span{
+    display:inline-block;opacity:0;transform:translateY(10px);
+    animation:huruf .5s var(--lentur) forwards;
+  }
+  @keyframes huruf{to{opacity:1;transform:none}}
+  .sapu{
+    position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(105deg,transparent 35%,rgba(242,169,59,.45) 50%,transparent 65%);
+    transform:translateX(-110%);
+  }
+  .sapu[data-jalan="1"]{animation:sapu 1.1s .45s ease-out}
+  @keyframes sapu{to{transform:translateX(110%)}}
+
+  /* gerak ikon pada tombol aksi */
+  .aksi a svg,.aksi button svg{transition:transform .3s var(--lentur)}
+  .aksi a:hover svg{transform:translateY(2px)}
+  .aksi #pBuka:hover svg{transform:translate(2px,-2px)}
+  .aksi #pBagi:hover svg,.aksi #pSalin:hover svg{transform:scale(1.12) rotate(-6px)}
+  .aksi button[data-tersalin="1"]{border-color:var(--pa);color:var(--pa)}
+
+  /* pemunculan bagian hasil saat masuk pandangan */
+  .lapis{opacity:0;transform:translateY(18px)}
+  .lapis[data-tampil="1"]{animation:naik .75s var(--lentur) forwards}
+
+  /* bilah melekat berisi nama dan tombol unduh */
+  .melekat{
+    position:fixed;top:0;left:0;right:0;z-index:50;
+    display:flex;align-items:center;justify-content:space-between;gap:1rem;
+    padding:.6rem clamp(.9rem,3vw,2rem);
+    background:rgba(10,31,63,.92);backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(255,255,255,.12);
+    transform:translateY(-110%);transition:transform .45s var(--lentur);
+  }
+  .melekat[data-tampil="1"]{transform:none}
+  .melekat__kiri{
+    display:flex;align-items:baseline;gap:.6rem;min-width:0;
+    font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;
+    color:rgba(255,255,255,.7);
+  }
+  .melekat__kiri strong{
+    font-family:var(--disp);font-variation-settings:"wdth" 106;font-weight:700;
+    font-size:.95rem;letter-spacing:-.01em;color:#fff;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:12rem;
+  }
+  .melekat a{
+    display:inline-flex;align-items:center;gap:.45rem;flex:none;
+    padding:.5rem 1rem;border-radius:999px;text-decoration:none;
+    font-family:var(--mono);font-size:.625rem;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--navy);
+    background:linear-gradient(100deg,var(--emas-2),var(--emas));
+    transition:transform .2s var(--lentur);
+  }
+  .melekat a:hover{transform:translateY(-2px)}
+
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-    .naik,.kartu,.lapis{opacity:1;transform:none}
+    .naik,.kartu,.lapis,.lencana b span{opacity:1;transform:none}
+    .bilah{display:none}
+    .melekat{transition:none}
     html{scroll-behavior:auto}
   }
 </style>
 </head>
 <body>
+
+<div class="bilah" id="bilah" role="presentation"></div>
+
+<div class="melekat" id="melekat">
+  <div class="melekat__kiri">
+    <strong id="mNama"></strong><span id="mTipe"></span>
+  </div>
+  <a id="mUnduh" href="#" download>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
+    Unduh
+  </a>
+</div>
 
 <header class="hero">
   <div class="hero__bg" id="latar" role="presentation"></div>
@@ -413,7 +567,7 @@
             <input id="d4" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4">
           </div>
         </div>
-        <button class="tombol" id="tombolCari" type="button" disabled>
+        <button class="tombol" id="tombolCari" type="button">
           <span id="labelTombol">Lihat hasil</span>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h13m-5-6 6 6-6 6"/></svg>
         </button>
@@ -424,11 +578,21 @@
         Contoh: nomor 0812&#8209;3456&#8209;<b>7890</b> &rarr; masukkan <b>7890</b>
       </p>
 
-      <div class="pesan" id="pesan" hidden></div>
+      <p class="catatan" id="statusData" hidden></p>
+
+      <div class="notif" id="notif" role="status" aria-live="polite" hidden>
+        <span class="notif__ikon" id="notifIkon"></span>
+        <div class="notif__isi">
+          <p class="notif__judul" id="notifJudul"></p>
+          <p class="notif__teks" id="notifTeks"></p>
+          <div class="notif__aksi" id="notifAksi" hidden></div>
+          <p class="notif__teknis" id="notifTeknis" hidden></p>
+        </div>
+      </div>
     </section>
 
     <div id="hasil" hidden>
-      <div class="hasil__kepala lapis lapis--1">
+      <div class="hasil__kepala lapis">
         <div>
           <p class="tag">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 3h6l4 4v14H5V3z"/><path d="M9 12h6M9 16h4"/></svg>
@@ -440,7 +604,7 @@
         <div class="lencana" id="pLencana"></div>
       </div>
 
-      <div class="aksi lapis lapis--2">
+      <div class="aksi lapis">
         <a id="pUnduh" class="utama" href="#" download>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14"/></svg>
           Unduh PDF
@@ -459,7 +623,7 @@
         </button>
       </div>
 
-      <div class="pratinjau lapis lapis--3">
+      <div class="pratinjau lapis">
         <div class="pratinjau__bar">
           <span id="pBerkas">Pratinjau psikogram</span>
           <button id="pPenuh" type="button">
@@ -510,7 +674,36 @@ var teks = function (s) { return document.createTextNode(s == null ? '' : String
 el('tombolWa').href = 'https://api.whatsapp.com/send/?phone=' + WA_ADMIN
   + '&text=' + encodeURIComponent(WA_PESAN);
 
+var kurangGerak = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /* ================= utilitas ================= */
+
+/** Umpan balik kesalahan: elemen digoyang sebentar. */
+function goyang(node) {
+  if (!node || kurangGerak) return;
+  node.classList.remove('goyang');
+  void node.offsetWidth;              // paksa hitung ulang agar animasi terulang
+  node.classList.add('goyang');
+  setTimeout(function () { node.classList.remove('goyang'); }, 550);
+}
+
+/** Bilah kemajuan tipis di puncak halaman selama permintaan jaringan. */
+var bilah = {
+  mulai: function () {
+    var b = el('bilah');
+    b.setAttribute('data-jalan', '1');
+    b.style.width = '12%';
+    setTimeout(function () { b.style.width = '68%'; }, 90);
+  },
+  selesai: function () {
+    var b = el('bilah');
+    b.style.width = '100%';
+    setTimeout(function () {
+      b.removeAttribute('data-jalan');
+      setTimeout(function () { b.style.width = '0'; }, 420);
+    }, 260);
+  }
+};
 
 function normal(s) {
   return String(s == null ? '' : s).toLowerCase()
@@ -557,7 +750,14 @@ kotakDigit.forEach(function (kotak, i) {
   kotak.addEventListener('input', function () {
     var bersih = this.value.replace(/[^0-9]/g, '');
     this.value = bersih.slice(-1);
-    if (this.value) this.setAttribute('data-isi', '1'); else this.removeAttribute('data-isi');
+    if (this.value) {
+      this.setAttribute('data-isi', '1');
+      this.setAttribute('data-baru', '1');
+      var diri = this;
+      setTimeout(function () { diri.removeAttribute('data-baru'); }, 340);
+    } else {
+      this.removeAttribute('data-isi');
+    }
     if (this.value && i < 3) kotakDigit[i + 1].focus();
     perbaruiTombol();
   });
@@ -590,15 +790,47 @@ kotakDigit.forEach(function (kotak, i) {
   kotak.addEventListener('focus', function () { this.select(); });
 });
 
+/**
+ * Tombol TIDAK pernah dimatikan. Tombol mati tidak menjelaskan apa yang kurang,
+ * jadi peserta menekannya dan merasa halamannya rusak. Yang berubah hanya
+ * kepekatan warnanya; pemeriksaan isian dilakukan saat diklik, disertai pesan.
+ */
 function perbaruiTombol() {
   var siap = normal(el('nama').value).length >= 3 && nilaiKunci().length === 4;
-  el('tombolCari').disabled = !siap;
+  el('tombolCari').setAttribute('data-siap', siap ? '1' : '0');
 }
 
 el('nama').addEventListener('input', perbaruiTombol);
 el('nama').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') { if (nilaiKunci().length === 4) cari(); else kotakDigit[0].focus(); }
 });
+
+/* riak dari titik klik pada tombol utama */
+el('tombolCari').addEventListener('pointerdown', function (e) {
+  if (kurangGerak) return;
+  var kotak = this.getBoundingClientRect();
+  var r = document.createElement('span');
+  r.className = 'riak';
+  var d = Math.max(kotak.width, kotak.height) * 2;
+  r.style.width = r.style.height = d + 'px';
+  r.style.left = (e.clientX - kotak.left) + 'px';
+  r.style.top = (e.clientY - kotak.top) + 'px';
+  this.appendChild(r);
+  setTimeout(function () { r.remove(); }, 640);
+});
+
+/* cahaya lembut mengikuti kursor di atas kartu */
+(function sorotKursor() {
+  if (kurangGerak || !window.matchMedia('(hover:hover)').matches) return;
+  var kartu = document.querySelector('.kartu');
+  kartu.addEventListener('pointermove', function (e) {
+    var k = kartu.getBoundingClientRect();
+    kartu.style.setProperty('--mx', ((e.clientX - k.left) / k.width * 100) + '%');
+    kartu.style.setProperty('--my', ((e.clientY - k.top) / k.height * 100) + '%');
+    kartu.setAttribute('data-sorot', '1');
+  });
+  kartu.addEventListener('pointerleave', function () { kartu.removeAttribute('data-sorot'); });
+})();
 
 /* ================= pengambilan data ================= */
 
@@ -628,10 +860,28 @@ function ambilData() {
     });
 }
 
-/* penghitung di hero: memuat data lebih awal sekaligus mempercepat pencarian */
-(function hitungAwal() {
+/**
+ * Dijalankan saat halaman dibuka: memuat data lebih awal supaya pencarian pertama
+ * terasa instan, mengisi penghitung di hero, dan yang terpenting — melaporkan
+ * masalah sumber data SEKARANG, bukan menunggu peserta menekan tombol.
+ */
+(function periksaAwal() {
+  var status = el('statusData');
+
+  /* Baris status ini keterangan operasional, jadi hanya tampil untuk panitia. */
+  function lapor(isi) {
+    if (!MODE_ADMIN) return;
+    status.hidden = false;
+    status.textContent = '';
+    status.appendChild(teks('Panitia \u00b7 ' + isi));
+  }
+
+  lapor('Menghubungi sumber data...');
+
   ambilData().then(function (data) {
     var siap = data.filter(function (r) { return String(r.fileid || '').trim(); }).length;
+    lapor(data.length + ' peserta terdata, ' + siap + ' psikogram siap diunduh.');
+
     if (!siap) return;
     el('chip').hidden = false;
     var t = el('chipTeks'), n = 0;
@@ -641,8 +891,45 @@ function ambilData() {
       t.textContent = n + ' psikogram siap diunduh';
       if (n < siap) requestAnimationFrame(naikAngka);
     })();
-  }).catch(function () { /* biarkan chip tersembunyi */ });
+  }).catch(function (err) {
+    lapor(err.message === 'BELUM_DISETEL' ? 'Akses hasil belum dibuka.'
+      : err.message === 'KOSONG' ? 'Belum ada hasil yang tersedia.'
+      : 'Gagal menghubungi server (' + err.message + ').');
+    notifSumber(err);
+  });
 })();
+
+/**
+ * Menerjemahkan kegagalan sumber data menjadi bahasa peserta.
+ * Sebab teknisnya tetap disimpan, tetapi hanya tampil dalam mode admin.
+ */
+function notifSumber(err) {
+  if (err.message === 'BELUM_DISETEL') {
+    notif({ nada: 'info', judul: 'Hasil belum dibuka',
+      isi: 'Panitia belum membuka akses hasil psikogram. Coba lagi setelah ada '
+        + 'pengumuman, atau tanyakan jadwalnya lewat WhatsApp.',
+      aksi: [aksiWa()],
+      teknis: 'SUMBER_CSV di index.html masih berisi teks contoh. Terbitkan sheet '
+        + 'PUBLIK lewat File > Bagikan > Publikasikan ke web dengan format CSV, '
+        + 'lalu tempel URL-nya.' });
+  } else if (err.message === 'KOSONG') {
+    notif({ nada: 'info', judul: 'Belum ada hasil',
+      isi: 'Daftar hasil masih kosong. Biasanya berarti pengolahan datanya belum '
+        + 'selesai. Coba lagi beberapa jam lagi.',
+      aksi: [aksiWa()],
+      teknis: 'Sumber CSV terbaca tetapi tidak ada baris data. Jalankan '
+        + '"Perbarui sheet PUBLIK" di spreadsheet.' });
+  } else {
+    notif({ nada: 'galat', judul: 'Gagal memuat data',
+      isi: 'Kami tidak bisa menghubungi server saat ini. Periksa koneksi '
+        + 'internetmu, lalu coba lagi.',
+      aksi: [ { label: 'Coba lagi', klik: function () { simpanan = null; tutupNotif(); cari(); } },
+              aksiWa() ],
+      teknis: 'Permintaan ke SUMBER_CSV gagal: ' + err.message
+        + '. Pastikan sheet DITERBITKAN sebagai CSV, bukan hanya dibagikan '
+        + 'lewat tautan.' });
+  }
+}
 
 /* ================= pencarian ================= */
 
@@ -651,19 +938,26 @@ function cari() {
   var kunci = nilaiKunci();
 
   if (normal(nama).length < 3) {
-    pesan('Nama belum lengkap', 'Tulis nama lengkapmu seperti saat mendaftar.');
+    notif({ nada: 'info', judul: 'Nama belum lengkap',
+      isi: 'Tulis nama lengkapmu seperti yang kamu pakai saat mendaftar.' });
+    goyang(el('nama').parentNode);
     el('nama').focus();
     return;
   }
   if (kunci.length !== 4) {
-    pesan('Kunci belum lengkap', 'Isi keempat kotak digit nomor WhatsApp kamu.');
+    notif({ nada: 'info', judul: 'Empat digit belum lengkap',
+      isi: 'Isi keempat kotaknya dengan 4 angka terakhir nomor WhatsApp kamu.' });
+    goyang(el('digit'));
     kotakDigit[Math.max(0, kunci.length)].focus();
     return;
   }
 
   sibuk(true);
+  bilah.mulai();
   ambilData().then(function (data) {
     sibuk(false);
+    bilah.selesai();
+    tutupNotif();
     var kn = normal(nama);
 
     var samaNama = data.filter(function (r) {
@@ -672,9 +966,12 @@ function cari() {
     });
 
     if (!samaNama.length) {
-      pesan('Nama tidak ditemukan',
-        'Periksa ejaannya, atau pastikan kamu memang sudah mengisi tes kepribadian. '
-        + 'Kalau sudah dan tetap tidak muncul, hubungi admin lewat tombol WhatsApp.');
+      notif({ nada: 'awas', judul: 'Nama tidak ditemukan',
+        isi: 'Kami tidak menemukan nama itu di daftar peserta. Coba periksa '
+          + 'ejaannya, atau pastikan kamu sudah mengisi tes kepribadiannya. '
+          + 'Kalau sudah mengisi dan tetap tidak muncul, hubungi kami.',
+        aksi: [aksiWa()] });
+      goyang(el('nama').parentNode);
       return;
     }
 
@@ -683,9 +980,11 @@ function cari() {
     });
 
     if (!cocok.length) {
-      pesan('4 digit tidak cocok',
-        'Nama itu terdaftar, tapi 4 digit terakhir nomor WhatsApp-nya berbeda. '
-        + 'Periksa lagi nomor yang kamu tulis saat mendaftar.');
+      notif({ nada: 'awas', judul: 'Empat digit tidak cocok',
+        isi: 'Namamu ada di daftar, tetapi empat angka itu berbeda dari nomor '
+          + 'WhatsApp yang kamu daftarkan. Coba periksa lagi nomornya.',
+        aksi: [aksiWa()] });
+      goyang(el('digit'));
       return;
     }
 
@@ -693,27 +992,12 @@ function cari() {
     tampilkan(cocok[0]);
   }).catch(function (err) {
     sibuk(false);
-    if (err.message === 'BELUM_DISETEL') {
-      pesan('Sumber data belum disetel',
-        'SUMBER_CSV di halaman ini masih kosong. Panitia perlu menerbitkan sheet '
-        + 'PUBLIK ke web lalu menempelkan URL CSV-nya.');
-    } else if (err.message === 'KOSONG') {
-      pesan('Data belum tersedia', 'Sheet PUBLIK masih kosong. Coba lagi nanti.');
-    } else {
-      pesan('Gagal memuat data',
-        'Sambungan ke sumber data gagal. Periksa koneksi internetmu lalu coba lagi.');
-    }
+    bilah.selesai();
+    notifSumber(err);
   });
 }
 
 function pilihSalahSatu(daftar) {
-  var kotak = el('pesan');
-  kotak.hidden = false;
-  kotak.textContent = '';
-  var b = document.createElement('b');
-  b.appendChild(teks('Ada beberapa data cocok'));
-  var p = document.createElement('div');
-  p.appendChild(teks('Pilih yang sesuai dengan waktu pengisianmu:'));
   var ul = document.createElement('ul');
   ul.className = 'pilihan';
   daftar.forEach(function (r) {
@@ -724,40 +1008,107 @@ function pilihSalahSatu(daftar) {
     var kanan = document.createElement('span');
     kanan.appendChild(teks(r.tanggal || 'tanpa tanggal'));
     bt.appendChild(kanan);
-    bt.onclick = function () { tampilkan(r); };
+    bt.onclick = function () { tutupNotif(); tampilkan(r); };
     li.appendChild(bt);
     ul.appendChild(li);
   });
-  kotak.appendChild(b);
-  kotak.appendChild(p);
-  kotak.appendChild(ul);
-  el('hasil').hidden = true;
+
+  notif({ nada: 'info', judul: 'Ada beberapa data yang cocok',
+    isi: 'Kamu tampaknya mengisi tes lebih dari sekali. Pilih yang sesuai:',
+    daftar: ul });
 }
 
-function pesan(judul, isi) {
-  var kotak = el('pesan');
-  kotak.hidden = false;
-  kotak.textContent = '';
-  var b = document.createElement('b');
-  var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', '13'); svg.setAttribute('height', '13');
+/* ================= notifikasi ================= */
+
+/**
+ * Satu komponen untuk semua pemberitahuan.
+ *
+ * Nada menentukan warna dan ikonnya:
+ *   info  — keadaan wajar, peserta hanya perlu tahu
+ *   awas  — isian atau data belum pas, masih bisa diperbaiki peserta
+ *   galat — halaman gagal bekerja, bukan salah peserta
+ *
+ * Isi teksnya ditulis untuk peserta, bukan untuk panitia. Keterangan teknis
+ * hanya tampil kalau alamat halaman diberi akhiran ?admin=1.
+ */
+var MODE_ADMIN = /[?&]admin=1/.test(location.search);
+
+var IKON_NADA = {
+  info:  'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-13h.01M11 12h1v4h1',
+  awas:  'M12 3 2 20h20L12 3zm0 6v5m0 3h.01',
+  galat: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9 9l6 6m0-6-6 6'
+};
+
+function notif(o) {
+  var kotak = el('notif');
+  var nada = o.nada || 'awas';
+  kotak.setAttribute('data-nada', nada);
+
+  var ikon = el('notifIkon');
+  ikon.textContent = '';
+  var ns = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
   svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2.2');
-  svg.setAttribute('stroke-linecap', 'round');
-  var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', 'M12 3 2 20h20L12 3zm0 6v5m0 3h.01');
+  svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  var path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', IKON_NADA[nada] || IKON_NADA.awas);
   svg.appendChild(path);
-  b.appendChild(svg);
-  b.appendChild(teks(judul));
-  kotak.appendChild(b);
-  kotak.appendChild(teks(isi));
-  el('hasil').hidden = true;
+  ikon.appendChild(svg);
+
+  el('notifJudul').textContent = o.judul || '';
+  el('notifTeks').textContent = o.isi || '';
+
+  var aksi = el('notifAksi');
+  aksi.textContent = '';
+  var daftarAksi = o.aksi || [];
+  aksi.hidden = !daftarAksi.length;
+  daftarAksi.forEach(function (a) {
+    var node;
+    if (a.href) {
+      node = document.createElement('a');
+      node.href = a.href;
+      if (a.href.indexOf('http') === 0) { node.target = '_blank'; node.rel = 'noopener'; }
+    } else {
+      node = document.createElement('button');
+      node.type = 'button';
+      node.onclick = a.klik;
+    }
+    if (a.gaya) node.className = a.gaya;
+    node.appendChild(teks(a.label));
+    aksi.appendChild(node);
+  });
+
+  var teknis = el('notifTeknis');
+  if (MODE_ADMIN && o.teknis) {
+    teknis.hidden = false;
+    teknis.textContent = 'Panitia \u00b7 ' + o.teknis;
+  } else {
+    teknis.hidden = true;
+    teknis.textContent = '';
+  }
+
+  if (o.daftar) el('notifTeks').appendChild(o.daftar);
+
+  kotak.hidden = false;
+  if (!o.pertahankanHasil) el('hasil').hidden = true;
+}
+
+function tutupNotif() { el('notif').hidden = true; }
+
+/** Tombol hubungi admin, dipakai berulang di beberapa notifikasi. */
+function aksiWa() {
+  return { label: 'Hubungi admin', gaya: 'wa',
+    href: 'https://api.whatsapp.com/send/?phone=' + WA_ADMIN
+      + '&text=' + encodeURIComponent(WA_PESAN) };
 }
 
 function sibuk(sedang) {
   var t = el('tombolCari');
   t.setAttribute('data-sibuk', sedang ? '1' : '0');
-  t.disabled = sedang;
+  t.disabled = sedang;   // hanya selama permintaan berjalan, bukan sebagai validasi
   el('labelTombol').textContent = sedang ? 'Memuat' : 'Lihat hasil';
   if (!sedang) perbaruiTombol();
 }
@@ -767,13 +1118,16 @@ function sibuk(sedang) {
 var urlSekarang = '';
 
 function tampilkan(r) {
-  el('pesan').hidden = true;
+  tutupNotif();
 
   var fileId = String(r.fileid || '').trim();
   if (!fileId) {
-    pesan('PDF belum tersedia',
-      'Data kamu sudah masuk, tapi psikogramnya belum selesai dibuat. '
-      + 'Coba lagi beberapa saat lagi, atau hubungi admin lewat tombol WhatsApp.');
+    notif({ nada: 'info', judul: 'Psikogram sedang disiapkan',
+      isi: 'Jawabanmu sudah masuk dan sudah dinilai, tetapi lembar psikogramnya '
+        + 'belum selesai dibuat. Coba lagi beberapa jam lagi.',
+      aksi: [aksiWa()],
+      teknis: 'Kolom fileid kosong untuk baris ini. Jalankan "Proses semua yang '
+        + 'belum selesai" lalu "Perbarui sheet PUBLIK".' });
     return;
   }
 
@@ -790,16 +1144,35 @@ function tampilkan(r) {
     meta.appendChild(s);
   });
 
+  /* Empat huruf muncul satu per satu, lalu disapu cahaya emas sekali.
+     Urutan kemunculannya sama dengan urutan dimensi E/I, S/N, T/F, J/P. */
   var lencana = el('pLencana');
   lencana.textContent = '';
   var b = document.createElement('b');
-  b.appendChild(teks(tipe));
+  tipe.split('').forEach(function (huruf, k) {
+    var sp = document.createElement('span');
+    sp.appendChild(teks(huruf));
+    sp.style.animationDelay = (0.1 + k * 0.11) + 's';
+    b.appendChild(sp);
+  });
   var i = document.createElement('i');
   i.appendChild(teks('tipe kepribadian'));
   lencana.appendChild(b);
   lencana.appendChild(i);
 
+  if (!kurangGerak) {
+    var sapu = document.createElement('span');
+    sapu.className = 'sapu';
+    lencana.appendChild(sapu);
+    requestAnimationFrame(function () { sapu.setAttribute('data-jalan', '1'); });
+    setTimeout(function () { sapu.remove(); }, 1800);
+  }
+
+  el('mNama').textContent = r.nama || 'Peserta';
+  el('mTipe').textContent = tipe;
+
   el('pUnduh').href = 'https://drive.google.com/uc?export=download&id=' + fileId;
+  el('mUnduh').href = 'https://drive.google.com/uc?export=download&id=' + fileId;
   el('pBuka').href = urlSekarang;
   el('pBagi').href = 'https://api.whatsapp.com/send/?text='
     + encodeURIComponent('Hasil psikogram YCS 2026 saya (' + tipe + '): ' + urlSekarang);
@@ -818,13 +1191,79 @@ function tampilkan(r) {
   }, 6000);
 
   el('hasil').hidden = false;
+  munculkanLapis();
   el('hasil').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+/**
+ * Bagian hasil dimunculkan saat benar-benar masuk pandangan, bukan pada jeda tetap,
+ * supaya urutannya terasa mengikuti guliran pembaca.
+ */
+function munculkanLapis() {
+  var lapis = document.querySelectorAll('#hasil .lapis');
+
+  if (kurangGerak || !('IntersectionObserver' in window)) {
+    lapis.forEach(function (n) { n.setAttribute('data-tampil', '1'); });
+    return;
+  }
+
+  var pengamat = new IntersectionObserver(function (masuk) {
+    masuk.forEach(function (x) {
+      if (!x.isIntersecting) return;
+      var urut = Array.prototype.indexOf.call(lapis, x.target);
+      x.target.style.animationDelay = (urut * 0.09) + 's';
+      x.target.setAttribute('data-tampil', '1');
+      pengamat.unobserve(x.target);
+    });
+  }, { threshold: 0.12 });
+
+  lapis.forEach(function (n) {
+    n.removeAttribute('data-tampil');
+    pengamat.observe(n);
+  });
+
+  // jaring pengaman kalau pengamat tidak pernah terpicu
+  setTimeout(function () {
+    lapis.forEach(function (n) { n.setAttribute('data-tampil', '1'); });
+  }, 2200);
+}
+
+/**
+ * Bilah melekat berisi nama dan tombol unduh, muncul begitu baris tombol aksi
+ * tergulir ke atas layar. Berguna karena pratinjau PDF-nya panjang.
+ */
+(function bilahMelekat() {
+  if (!('IntersectionObserver' in window)) return;
+  var penanda = document.querySelector('.aksi');
+  var bar = el('melekat');
+  new IntersectionObserver(function (masuk) {
+    masuk.forEach(function (x) {
+      var tampil = !x.isIntersecting && x.boundingClientRect.top < 0
+        && !el('hasil').hidden;
+      if (tampil) bar.setAttribute('data-tampil', '1');
+      else bar.removeAttribute('data-tampil');
+    });
+  }, { threshold: 0 }).observe(penanda);
+})();
 
 /* salin tautan */
 el('pSalin').addEventListener('click', function () {
   if (!urlSekarang) return;
-  var selesai = function () { roti('Tautan psikogram tersalin'); };
+  var tombolSalin = this;
+  var selesai = function () {
+    roti('Tautan psikogram tersalin');
+    tombolSalin.setAttribute('data-tersalin', '1');
+    var jalur = tombolSalin.querySelector('path');
+    var kotakLama = tombolSalin.querySelector('rect');
+    var asalJalur = jalur ? jalur.getAttribute('d') : null;
+    if (jalur) jalur.setAttribute('d', 'M5 13l4 4L19 7');
+    if (kotakLama) kotakLama.style.display = 'none';
+    setTimeout(function () {
+      tombolSalin.removeAttribute('data-tersalin');
+      if (jalur && asalJalur) jalur.setAttribute('d', asalJalur);
+      if (kotakLama) kotakLama.style.display = '';
+    }, 1900);
+  };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(urlSekarang).then(selesai, cadangan);
   } else { cadangan(); }
