@@ -659,12 +659,14 @@
 /* ============================================================
    KONFIGURASI — hanya baris di bawah ini yang perlu diubah
    ============================================================
-   SUMBER_CSV : URL hasil "Publikasikan ke web" untuk sheet PUBLIK, format CSV.
-                File > Bagikan > Publikasikan ke web > pilih sheet PUBLIK >
-                Nilai dipisahkan koma (.csv) > Publikasikan.
-   WA_ADMIN   : nomor admin untuk tombol bantuan, format 62xxx tanpa tanda plus.
+   SUMBER_SHEET : URL spreadsheet PUBLIK. Tempel apa adanya dari bilah alamat
+                  browser, termasuk bagian #gid=... di belakangnya. Menu
+                  "Perbarui sheet PUBLIK" di spreadsheet menampilkan URL ini
+                  lengkap dengan tombol salin.
+                  URL hasil "Publikasikan ke web" juga tetap diterima.
+   WA_ADMIN     : nomor admin untuk tombol bantuan, format 62xxx tanpa tanda plus.
    ============================================================ */
-var SUMBER_CSV = 'GANTI_DENGAN_URL_CSV_SHEET_PUBLIK';
+var SUMBER_SHEET = 'GANTI_DENGAN_URL_SHEET_PUBLIK';
 var WA_ADMIN   = '628888555591';
 var WA_PESAN   = 'Saya butuh bantuan cek hasil psikogram YCS 2026';
 
@@ -836,28 +838,72 @@ el('tombolCari').addEventListener('pointerdown', function (e) {
 
 var simpanan = null;
 
+/**
+ * Menyusun daftar alamat CSV dari apa pun yang ditempel ke SUMBER_SHEET.
+ *
+ * Diterima tiga bentuk:
+ *   1. URL biasa spreadsheet  .../spreadsheets/d/{id}/edit#gid={gid}
+ *   2. URL gviz atau apa pun yang sudah mengandung output=csv
+ *   3. URL hasil "Publikasikan ke web"
+ *
+ * Untuk bentuk pertama dikembalikan dua alamat: gviz lebih dulu, lalu export
+ * sebagai cadangan. Keduanya melayani berkas yang sama, tetapi ada jaringan
+ * sekolah yang memblokir salah satunya.
+ */
+function alamatCsv() {
+  var s = String(SUMBER_SHEET || '').trim();
+  if (!s || s.indexOf('GANTI_DENGAN') === 0) return [];
+  if (s.indexOf('output=csv') >= 0 || s.indexOf('/gviz/') >= 0) return [s];
+
+  var id = (s.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || [])[1];
+  if (!id) return [];
+  var gid = (s.match(/[#?&]gid=([0-9]+)/) || [])[1] || '0';
+
+  var dasar = 'https://docs.google.com/spreadsheets/d/' + id;
+  return [
+    dasar + '/gviz/tq?tqx=out:csv&headers=1&gid=' + gid,
+    dasar + '/export?format=csv&gid=' + gid
+  ];
+}
+
 function ambilData() {
   if (simpanan) return Promise.resolve(simpanan);
-  if (!SUMBER_CSV || SUMBER_CSV.indexOf('GANTI_DENGAN') === 0) {
-    return Promise.reject(new Error('BELUM_DISETEL'));
-  }
-  var pemisah = SUMBER_CSV.indexOf('?') >= 0 ? '&' : '?';
-  return fetch(SUMBER_CSV + pemisah + 'cb=' + Date.now(), { cache: 'no-store' })
-    .then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
-    })
-    .then(function (t) {
-      var baris = bacaCsv(t);
-      if (baris.length < 2) throw new Error('KOSONG');
-      var judul = baris[0].map(function (h) { return String(h).trim().toLowerCase(); });
-      simpanan = baris.slice(1).map(function (r) {
-        var o = {};
-        judul.forEach(function (h, i) { o[h] = r[i] != null ? String(r[i]).trim() : ''; });
-        return o;
+
+  var alamat = alamatCsv();
+  if (!alamat.length) return Promise.reject(new Error('BELUM_DISETEL'));
+
+  var galatTerakhir = null;
+
+  function coba(i) {
+    if (i >= alamat.length) throw (galatTerakhir || new Error('Tidak ada alamat yang bisa dipakai'));
+    var pemisah = alamat[i].indexOf('?') >= 0 ? '&' : '?';
+    return fetch(alamat[i] + pemisah + 'cb=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function (t) {
+        // Sheet yang belum boleh dibaca publik membalas halaman login, bukan CSV.
+        if (/^\s*</.test(t)) throw new Error('AKSES_DITOLAK');
+        return t;
+      })
+      .catch(function (e) {
+        galatTerakhir = e;
+        return coba(i + 1);
       });
-      return simpanan;
+  }
+
+  return coba(0).then(function (t) {
+    var baris = bacaCsv(t);
+    if (baris.length < 2) throw new Error('KOSONG');
+    var judul = baris[0].map(function (h) { return String(h).trim().toLowerCase(); });
+    simpanan = baris.slice(1).map(function (r) {
+      var o = {};
+      judul.forEach(function (h, i) { o[h] = r[i] != null ? String(r[i]).trim() : ''; });
+      return o;
     });
+    return simpanan;
+  });
 }
 
 /**
@@ -892,8 +938,9 @@ function ambilData() {
       if (n < siap) requestAnimationFrame(naikAngka);
     })();
   }).catch(function (err) {
-    lapor(err.message === 'BELUM_DISETEL' ? 'Akses hasil belum dibuka.'
-      : err.message === 'KOSONG' ? 'Belum ada hasil yang tersedia.'
+    lapor(err.message === 'BELUM_DISETEL' ? 'SUMBER_SHEET belum diisi.'
+      : err.message === 'AKSES_DITOLAK' ? 'Spreadsheet PUBLIK belum dapat dibaca publik.'
+      : err.message === 'KOSONG' ? 'Sheet terbaca tetapi tidak ada barisnya.'
       : 'Gagal menghubungi server (' + err.message + ').');
     notifSumber(err);
   });
@@ -909,9 +956,9 @@ function notifSumber(err) {
       isi: 'Panitia belum membuka akses hasil psikogram. Coba lagi setelah ada '
         + 'pengumuman, atau tanyakan jadwalnya lewat WhatsApp.',
       aksi: [aksiWa()],
-      teknis: 'SUMBER_CSV di index.html masih berisi teks contoh. Terbitkan sheet '
-        + 'PUBLIK lewat File > Bagikan > Publikasikan ke web dengan format CSV, '
-        + 'lalu tempel URL-nya.' });
+      teknis: 'SUMBER_SHEET di index.html masih berisi teks contoh. Jalankan menu '
+        + '"Perbarui sheet PUBLIK" di spreadsheet, salin URL yang muncul, lalu '
+        + 'tempel ke SUMBER_SHEET.' });
   } else if (err.message === 'KOSONG') {
     notif({ nada: 'info', judul: 'Belum ada hasil',
       isi: 'Daftar hasil masih kosong. Biasanya berarti pengolahan datanya belum '
@@ -919,13 +966,22 @@ function notifSumber(err) {
       aksi: [aksiWa()],
       teknis: 'Sumber CSV terbaca tetapi tidak ada baris data. Jalankan '
         + '"Perbarui sheet PUBLIK" di spreadsheet.' });
+  } else if (err.message === 'AKSES_DITOLAK') {
+    notif({ nada: 'info', judul: 'Hasil belum dibuka',
+      isi: 'Panitia belum membuka akses hasil psikogram. Coba lagi setelah ada '
+        + 'pengumuman, atau tanyakan jadwalnya lewat WhatsApp.',
+      aksi: [aksiWa()],
+      teknis: 'Server membalas halaman HTML, bukan CSV — berarti spreadsheet '
+        + 'PUBLIK belum disetel "Siapa saja yang memiliki link \u2192 Pelihat". '
+        + 'Jalankan menu "Perbarui sheet PUBLIK" untuk membuat ulang berkas '
+        + 'beserta izinnya.' });
   } else {
     notif({ nada: 'galat', judul: 'Gagal memuat data',
       isi: 'Kami tidak bisa menghubungi server saat ini. Periksa koneksi '
         + 'internetmu, lalu coba lagi.',
       aksi: [ { label: 'Coba lagi', klik: function () { simpanan = null; tutupNotif(); cari(); } },
               aksiWa() ],
-      teknis: 'Permintaan ke SUMBER_CSV gagal: ' + err.message
+      teknis: 'Semua alamat CSV gagal dihubungi: ' + err.message
         + '. Pastikan sheet DITERBITKAN sebagai CSV, bukan hanya dibagikan '
         + 'lewat tautan.' });
   }
