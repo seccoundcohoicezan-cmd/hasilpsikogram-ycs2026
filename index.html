@@ -651,7 +651,7 @@
 <p class="kaki">
   &copy; 2026 Youth Character Summit &middot; Universitas STEKOM<br>
   Hasil tes ini bahan diskusi untuk wawancara, bukan penilaian akhir.<br>
-  <span class="cap" id="cap">v11</span>
+  <span class="cap" id="cap">v12</span>
 </p>
 
 <a class="wa" id="tombolWa" href="#" target="_blank" rel="noopener">
@@ -686,7 +686,7 @@ var CSV_URL_GID = DASAR + '&gid=0';
 
 /* Penanda versi, tampil di kaki halaman. Berguna untuk memastikan berkas yang
    ter-deploy memang yang terbaru. */
-var VERSI = 'v11';
+var VERSI = 'v12';
 
 var WA_ADMIN   = '628888555591';
 var WA_PESAN   = 'Saya butuh bantuan cek hasil psikogram YCS 2026';
@@ -1342,6 +1342,9 @@ document.addEventListener('keydown', function (e) {
     el('pPenuh').click();
   }
 });
+
+/* ================= pengait ================= */
+el('tombolCari').addEventListener('click', cari);
 
 /* gerak halus latar hero saat menggulir */
 (function parallaks() {
