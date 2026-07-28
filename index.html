@@ -651,7 +651,7 @@
 <p class="kaki">
   &copy; 2026 Youth Character Summit &middot; Universitas STEKOM<br>
   Hasil tes ini bahan diskusi untuk wawancara, bukan penilaian akhir.<br>
-  <span class="cap" id="cap">v10</span>
+  <span class="cap" id="cap">v11</span>
 </p>
 
 <a class="wa" id="tombolWa" href="#" target="_blank" rel="noopener">
@@ -686,7 +686,7 @@ var CSV_URL_GID = DASAR + '&gid=0';
 
 /* Penanda versi, tampil di kaki halaman. Berguna untuk memastikan berkas yang
    ter-deploy memang yang terbaru. */
-var VERSI = 'v10';
+var VERSI = 'v11';
 
 var WA_ADMIN   = '628888555591';
 var WA_PESAN   = 'Saya butuh bantuan cek hasil psikogram YCS 2026';
@@ -870,9 +870,16 @@ el('tombolCari').addEventListener('pointerdown', function (e) {
  *
  * Kolom dibaca berdasarkan urutan, bukan nama, karena sheet-nya dibuat oleh
  * skrip kita sendiri sehingga urutannya pasti:
- *   nama | kunci | tipe | julukan | tanggal | fileid
+ *   No | Nama Lengkap | Kunci | Tipe | Julukan | Tanggal | Link Psikogram | Status
  */
 var DATA = [];
+
+/** Menarik ID berkas dari tautan Drive, apa pun bentuk tautannya. */
+function idDrive(tautan) {
+  if (!tautan) return '';
+  var m = tautan.match(/\/d\/([a-zA-Z0-9_-]+)/) || tautan.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : '';
+}
 
 async function ambilDari(url) {
   try {
@@ -884,12 +891,14 @@ async function ambilDari(url) {
     baris.shift();                                   // buang baris judul
     return baris.map(function (b) {
       return {
-        nama:    (b[0] || '').trim(),
-        kunci:   (b[1] || '').trim(),
-        tipe:    (b[2] || '').trim(),
-        julukan: (b[3] || '').trim(),
-        tanggal: (b[4] || '').trim(),
-        fileid:  (b[5] || '').trim()
+        nama:    (b[1] || '').trim(),
+        kunci:   (b[2] || '').trim(),
+        tipe:    (b[3] || '').trim(),
+        julukan: (b[4] || '').trim(),
+        tanggal: (b[5] || '').trim(),
+        link:    (b[6] || '').trim(),
+        status:  (b[7] || '').trim(),
+        fileid:  idDrive((b[6] || '').trim())
       };
     }).filter(function (d) { return d.nama; });
   } catch (e) {
