@@ -363,6 +363,11 @@
   .panggung--penuh iframe{height:100vh}
 
   /* ================= KAKI ================= */
+  .cap{
+    display:inline-block;margin-top:.6rem;padding:.2rem .6rem;border-radius:999px;
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+    font-size:.625rem;letter-spacing:.1em;color:rgba(255,255,255,.4);
+  }
   .kaki{
     padding:0 var(--pad) clamp(2.5rem,6vw,4rem);text-align:center;
     font-family:var(--mono);font-size:.6875rem;letter-spacing:.05em;
@@ -645,7 +650,8 @@
 
 <p class="kaki">
   &copy; 2026 Youth Character Summit &middot; Universitas STEKOM<br>
-  Hasil tes ini bahan diskusi untuk wawancara, bukan penilaian akhir.
+  Hasil tes ini bahan diskusi untuk wawancara, bukan penilaian akhir.<br>
+  <span class="cap" id="cap">v9</span>
 </p>
 
 <a class="wa" id="tombolWa" href="#" target="_blank" rel="noopener">
@@ -659,14 +665,23 @@
 /* ============================================================
    KONFIGURASI — hanya baris di bawah ini yang perlu diubah
    ============================================================
-   SUMBER_SHEET : URL spreadsheet PUBLIK. Tempel apa adanya dari bilah alamat
-                  browser, termasuk bagian #gid=... di belakangnya. Menu
-                  "Perbarui sheet PUBLIK" di spreadsheet menampilkan URL ini
-                  lengkap dengan tombol salin.
-                  URL hasil "Publikasikan ke web" juga tetap diterima.
+   SHEET_ID     : ID spreadsheet PUBLIK, potongan panjang di antara /d/ dan /edit
+                  pada URL-nya.
+   NAMA_SHEET   : nama tab di dalamnya. Harus persis, peka huruf besar-kecil.
    WA_ADMIN     : nomor admin untuk tombol bantuan, format 62xxx tanpa tanda plus.
    ============================================================ */
-var SUMBER_SHEET = 'https://docs.google.com/spreadsheets/d/1_QqbgIeFuz9Tj6pMLz8o8I5Fxu7QvyIFMfktbmiTRhU/edit#gid=0';
+/* Sumber data: sheet PUBLIK. Polanya sama persis dengan halaman cek sertifikat
+   Duta Teladan yang sudah terbukti jalan — gviz CSV dipanggil dengan NAMA tab,
+   bukan gid, tanpa parameter tambahan apa pun. */
+var SHEET_ID   = '1_QqbgIeFuz9Tj6pMLz8o8I5Fxu7QvyIFMfktbmiTRhU';
+var NAMA_SHEET = 'PUBLIK';
+var CSV_URL    = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID
+               + '/gviz/tq?tqx=out:csv&sheet=' + NAMA_SHEET;
+
+/* Penanda versi, tampil di kaki halaman. Berguna untuk memastikan berkas yang
+   ter-deploy memang yang terbaru. */
+var VERSI = 'v9';
+
 var WA_ADMIN   = '628888555591';
 var WA_PESAN   = 'Saya butuh bantuan cek hasil psikogram YCS 2026';
 
@@ -836,233 +851,106 @@ el('tombolCari').addEventListener('pointerdown', function (e) {
 
 /* ================= pengambilan data ================= */
 
-var simpanan = null;
-
 /**
- * Membaca identitas spreadsheet dari apa pun yang ditempel ke SUMBER_SHEET.
- * Menerima URL biasa dari bilah alamat, termasuk bagian #gid=... di belakangnya.
- */
-function bacaSumber() {
-  var s = String(SUMBER_SHEET || '').trim();
-  if (!s || s.indexOf('GANTI_DENGAN') === 0) return null;
-
-  // URL hasil "Publikasikan ke web" tetap didukung dan diambil lewat fetch biasa.
-  if (s.indexOf('output=csv') >= 0) return { csv: s };
-
-  var id = (s.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || [])[1];
-  if (!id) return null;
-  var gid = (s.match(/[#?&]gid=([0-9]+)/) || [])[1] || '0';
-  return { id: id, gid: gid };
-}
-
-/**
- * Mengambil data lewat TAG SCRIPT, bukan fetch.
+ * Memuat seluruh baris sheet PUBLIK. DATA bernilai null kalau sambungan gagal,
+ * dan array kosong kalau sheet-nya memang belum ada isinya.
  *
- * Endpoint gviz milik Google mengalihkan permintaan ke googleusercontent.com yang
- * tidak mengirim header izin lintas domain, sehingga fetch dari domain lain selalu
- * diblokir browser. Tag script tidak tunduk pada aturan itu: Google mengembalikan
- * JavaScript yang memanggil fungsi bernama, dan fungsi itu yang menerima datanya.
+ * Kolom dibaca berdasarkan urutan, bukan nama, karena sheet-nya dibuat oleh
+ * skrip kita sendiri sehingga urutannya pasti:
+ *   nama | kunci | tipe | julukan | tanggal | fileid
  */
-function ambilLewatSkrip(id, gid) {
-  return new Promise(function (terima, tolak) {
-    var namaFungsi = '__psikogram' + Date.now();
-    var skrip = document.createElement('script');
-    var selesai = false;
+var DATA = [];
 
-    function bersihkan() {
-      try { delete window[namaFungsi]; } catch (e) { window[namaFungsi] = undefined; }
-      if (skrip.parentNode) skrip.parentNode.removeChild(skrip);
-    }
-
-    var batas = setTimeout(function () {
-      if (selesai) return;
-      selesai = true;
-      bersihkan();
-      // Sheet yang belum boleh dibaca publik membalas halaman login, bukan JavaScript,
-      // sehingga fungsi penerima tidak pernah dipanggil dan kita berhenti di sini.
-      tolak(new Error('AKSES_DITOLAK'));
-    }, 15000);
-
-    window[namaFungsi] = function (jawaban) {
-      if (selesai) return;
-      selesai = true;
-      clearTimeout(batas);
-      bersihkan();
-      try { terima(dariGviz(jawaban)); }
-      catch (e) { tolak(e); }
-    };
-
-    skrip.onerror = function () {
-      if (selesai) return;
-      selesai = true;
-      clearTimeout(batas);
-      bersihkan();
-      tolak(new Error('AKSES_DITOLAK'));
-    };
-
-    skrip.src = 'https://docs.google.com/spreadsheets/d/' + id
-      + '/gviz/tq?tqx=out:json;responseHandler:' + namaFungsi
-      + '&headers=1&gid=' + gid + '&cb=' + Date.now();
-    document.head.appendChild(skrip);
-  });
-}
-
-/** Mengubah jawaban gviz menjadi daftar objek berkunci nama kolom. */
-function dariGviz(jawaban) {
-  if (!jawaban || !jawaban.table) throw new Error('KOSONG');
-
-  var kolom = (jawaban.table.cols || []).map(function (c) {
-    return String(c.label || c.id || '').trim().toLowerCase();
-  });
-  var baris = jawaban.table.rows || [];
-
-  // Kalau label kolom kosong, berarti baris judul ikut terbaca sebagai data.
-  if (!kolom.filter(Boolean).length && baris.length) {
-    kolom = (baris[0].c || []).map(function (sel) {
-      return sel && sel.v != null ? String(sel.v).trim().toLowerCase() : '';
-    });
-    baris = baris.slice(1);
+async function muatData() {
+  try {
+    var r = await fetch(CSV_URL);
+    var txt = await r.text();
+    var baris = bacaCsv(txt).filter(function (x) { return x.join('').trim() !== ''; });
+    baris.shift();                                   // buang baris judul
+    DATA = baris.map(function (b) {
+      return {
+        nama:    (b[0] || '').trim(),
+        kunci:   (b[1] || '').trim(),
+        tipe:    (b[2] || '').trim(),
+        julukan: (b[3] || '').trim(),
+        tanggal: (b[4] || '').trim(),
+        fileid:  (b[5] || '').trim()
+      };
+    }).filter(function (d) { return d.nama; });
+  } catch (e) {
+    DATA = null;
   }
-
-  var hasil = baris.map(function (r) {
-    var o = {};
-    kolom.forEach(function (h, i) {
-      if (!h) return;
-      var sel = r.c && r.c[i];
-      var nilai = sel ? (sel.f != null ? sel.f : sel.v) : null;
-      o[h] = nilai == null ? '' : String(nilai).trim();
-    });
-    return o;
-  }).filter(function (o) { return o.nama; });
-
-  if (!hasil.length) throw new Error('KOSONG');
-  return hasil;
-}
-
-/** Jalur cadangan untuk URL "Publikasikan ke web", yang memang ramah fetch. */
-function ambilLewatFetch(url) {
-  var pemisah = url.indexOf('?') >= 0 ? '&' : '?';
-  return fetch(url + pemisah + 'cb=' + Date.now(), { cache: 'no-store' })
-    .then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
-    })
-    .then(function (t) {
-      if (/^\s*</.test(t)) throw new Error('AKSES_DITOLAK');
-      var baris = bacaCsv(t);
-      if (baris.length < 2) throw new Error('KOSONG');
-      var judul = baris[0].map(function (h) { return String(h).trim().toLowerCase(); });
-      return baris.slice(1).map(function (r) {
-        var o = {};
-        judul.forEach(function (h, i) { o[h] = r[i] != null ? String(r[i]).trim() : ''; });
-        return o;
-      }).filter(function (o) { return o.nama; });
-    });
-}
-
-var simpanan = null;
-
-function ambilData() {
-  if (simpanan) return Promise.resolve(simpanan);
-
-  var sumber = bacaSumber();
-  if (!sumber) return Promise.reject(new Error('BELUM_DISETEL'));
-
-  var janji = sumber.csv
-    ? ambilLewatFetch(sumber.csv)
-    : ambilLewatSkrip(sumber.id, sumber.gid);
-
-  return janji.then(function (data) {
-    if (!data.length) throw new Error('KOSONG');
-    simpanan = data;
-    return simpanan;
-  });
 }
 
 /**
- * Dijalankan saat halaman dibuka: memuat data lebih awal supaya pencarian pertama
- * terasa instan, mengisi penghitung di hero, dan yang terpenting — melaporkan
- * masalah sumber data SEKARANG, bukan menunggu peserta menekan tombol.
+ * Dijalankan saat halaman dibuka: memuat data lebih awal supaya pencarian
+ * pertama terasa instan, dan mengisi penghitung di hero.
  */
-(function periksaAwal() {
+(async function periksaAwal() {
   var status = el('statusData');
 
-  /* Baris status ini keterangan operasional, jadi hanya tampil untuk panitia. */
+  /* Baris status ini keterangan operasional, jadi hanya tampil untuk panitia
+     lewat ?admin=1. */
   function lapor(isi) {
     if (!MODE_ADMIN) return;
     status.hidden = false;
     status.textContent = '';
     status.appendChild(teks('Panitia \u00b7 ' + isi));
   }
+  function cap(isi) { el('cap').textContent = VERSI + ' \u00b7 ' + isi; }
 
-  lapor('Menghubungi sumber data...');
+  cap('memuat');
+  lapor('Menghubungi sheet PUBLIK...');
 
-  ambilData().then(function (data) {
-    var siap = data.filter(function (r) { return String(r.fileid || '').trim(); }).length;
-    lapor(data.length + ' peserta terdata, ' + siap + ' psikogram siap diunduh.');
+  await muatData();
 
-    if (!siap) return;
-    el('chip').hidden = false;
-    var t = el('chipTeks'), n = 0;
-    var langkah = Math.max(1, Math.round(siap / 26));
-    (function naikAngka() {
-      n = Math.min(siap, n + langkah);
-      t.textContent = n + ' psikogram siap diunduh';
-      if (n < siap) requestAnimationFrame(naikAngka);
-    })();
-  }).catch(function (err) {
-    lapor(err.message === 'BELUM_DISETEL' ? 'SUMBER_SHEET belum diisi.'
-      : err.message === 'AKSES_DITOLAK' ? 'Spreadsheet PUBLIK belum dapat dibaca publik.'
-      : err.message === 'KOSONG' ? 'Sheet terbaca tetapi tidak ada barisnya.'
-      : 'Gagal menghubungi server (' + err.message + ').');
-    notifSumber(err);
-  });
+  if (DATA === null) {
+    cap('gagal koneksi');
+    lapor('Sambungan ke sheet gagal. Periksa akses "Siapa saja yang memiliki link".');
+    return;
+  }
+
+  var siap = DATA.filter(function (d) { return d.fileid; }).length;
+  cap(DATA.length + ' data');
+  lapor(DATA.length + ' baris terbaca, ' + siap + ' punya PDF.');
+
+  if (!siap) return;
+  el('chip').hidden = false;
+  var t = el('chipTeks'), n = 0;
+  var langkah = Math.max(1, Math.round(siap / 26));
+  (function naikAngka() {
+    n = Math.min(siap, n + langkah);
+    t.textContent = n + ' psikogram siap diunduh';
+    if (n < siap) requestAnimationFrame(naikAngka);
+  })();
 })();
 
-/**
- * Menerjemahkan kegagalan sumber data menjadi bahasa peserta.
- * Sebab teknisnya tetap disimpan, tetapi hanya tampil dalam mode admin.
- */
-function notifSumber(err) {
-  if (err.message === 'BELUM_DISETEL') {
-    notif({ nada: 'info', judul: 'Hasil belum dibuka',
-      isi: 'Panitia belum membuka akses hasil psikogram. Coba lagi setelah ada '
-        + 'pengumuman, atau tanyakan jadwalnya lewat WhatsApp.',
-      aksi: [aksiWa()],
-      teknis: 'SUMBER_SHEET di index.html masih berisi teks contoh. Jalankan menu '
-        + '"Perbarui sheet PUBLIK" di spreadsheet, salin URL yang muncul, lalu '
-        + 'tempel ke SUMBER_SHEET.' });
-  } else if (err.message === 'KOSONG') {
+/** Dua kemungkinan saja: sambungan gagal, atau datanya memang belum ada. */
+function notifSumber(gagalKoneksi) {
+  if (gagalKoneksi) {
+    notif({ nada: 'galat', judul: 'Gagal memuat data',
+      isi: 'Kami tidak bisa menghubungi server saat ini. Periksa koneksi '
+        + 'internetmu, lalu coba lagi.',
+      aksi: [ { label: 'Coba lagi', klik: async function () {
+                  tutupNotif(); DATA = []; await muatData(); cari();
+                } },
+              aksiWa() ],
+      teknis: 'fetch ke ' + CSV_URL + ' gagal. Pastikan spreadsheet PUBLIK '
+        + 'disetel "Siapa saja yang memiliki link \u2192 Pelihat" dan nama tab-nya '
+        + 'persis "' + NAMA_SHEET + '".' });
+  } else {
     notif({ nada: 'info', judul: 'Belum ada hasil',
       isi: 'Daftar hasil masih kosong. Biasanya berarti pengolahan datanya belum '
         + 'selesai. Coba lagi beberapa jam lagi.',
       aksi: [aksiWa()],
-      teknis: 'Sumber CSV terbaca tetapi tidak ada baris data. Jalankan '
+      teknis: 'Sheet terbaca tetapi tidak ada barisnya. Jalankan '
         + '"Perbarui sheet PUBLIK" di spreadsheet.' });
-  } else if (err.message === 'AKSES_DITOLAK') {
-    notif({ nada: 'info', judul: 'Hasil belum dibuka',
-      isi: 'Panitia belum membuka akses hasil psikogram. Coba lagi setelah ada '
-        + 'pengumuman, atau tanyakan jadwalnya lewat WhatsApp.',
-      aksi: [aksiWa()],
-      teknis: 'Server membalas halaman HTML, bukan CSV — berarti spreadsheet '
-        + 'PUBLIK belum disetel "Siapa saja yang memiliki link \u2192 Pelihat". '
-        + 'Jalankan menu "Perbarui sheet PUBLIK" untuk membuat ulang berkas '
-        + 'beserta izinnya.' });
-  } else {
-    notif({ nada: 'galat', judul: 'Gagal memuat data',
-      isi: 'Kami tidak bisa menghubungi server saat ini. Periksa koneksi '
-        + 'internetmu, lalu coba lagi.',
-      aksi: [ { label: 'Coba lagi', klik: function () { simpanan = null; tutupNotif(); cari(); } },
-              aksiWa() ],
-      teknis: 'Semua alamat CSV gagal dihubungi: ' + err.message
-        + '. Pastikan sheet DITERBITKAN sebagai CSV, bukan hanya dibagikan '
-        + 'lewat tautan.' });
   }
 }
 
 /* ================= pencarian ================= */
 
-function cari() {
+async function cari() {
   var nama = el('nama').value;
   var kunci = nilaiKunci();
 
@@ -1083,47 +971,46 @@ function cari() {
 
   sibuk(true);
   bilah.mulai();
-  ambilData().then(function (data) {
-    sibuk(false);
-    bilah.selesai();
-    tutupNotif();
-    var kn = normal(nama);
+  if (DATA === null || DATA.length === 0) await muatData();
+  sibuk(false);
+  bilah.selesai();
 
-    var samaNama = data.filter(function (r) {
-      var rn = normal(r.nama);
-      return rn === kn || rn.indexOf(kn) >= 0 || kn.indexOf(rn) >= 0;
-    });
+  if (DATA === null) { notifSumber(true); return; }
+  if (!DATA.length) { notifSumber(false); return; }
 
-    if (!samaNama.length) {
-      notif({ nada: 'awas', judul: 'Nama tidak ditemukan',
-        isi: 'Kami tidak menemukan nama itu di daftar peserta. Coba periksa '
-          + 'ejaannya, atau pastikan kamu sudah mengisi tes kepribadiannya. '
-          + 'Kalau sudah mengisi dan tetap tidak muncul, hubungi kami.',
-        aksi: [aksiWa()] });
-      goyang(el('nama').parentNode);
-      return;
-    }
+  tutupNotif();
+  var kn = normal(nama);
 
-    var cocok = samaNama.filter(function (r) {
-      return String(r.kunci).replace(/[^0-9]/g, '') === kunci;
-    });
-
-    if (!cocok.length) {
-      notif({ nada: 'awas', judul: 'Empat digit tidak cocok',
-        isi: 'Namamu ada di daftar, tetapi empat angka itu berbeda dari nomor '
-          + 'WhatsApp yang kamu daftarkan. Coba periksa lagi nomornya.',
-        aksi: [aksiWa()] });
-      goyang(el('digit'));
-      return;
-    }
-
-    if (cocok.length > 1) { pilihSalahSatu(cocok); return; }
-    tampilkan(cocok[0]);
-  }).catch(function (err) {
-    sibuk(false);
-    bilah.selesai();
-    notifSumber(err);
+  var samaNama = DATA.filter(function (d) {
+    var dn = normal(d.nama);
+    return dn === kn || dn.indexOf(kn) >= 0 || kn.indexOf(dn) >= 0;
   });
+
+  if (!samaNama.length) {
+    notif({ nada: 'awas', judul: 'Nama tidak ditemukan',
+      isi: 'Kami tidak menemukan nama itu di daftar peserta. Coba periksa '
+        + 'ejaannya, atau pastikan kamu sudah mengisi tes kepribadiannya. '
+        + 'Kalau sudah mengisi dan tetap tidak muncul, hubungi kami.',
+      aksi: [aksiWa()] });
+    goyang(el('nama').parentNode);
+    return;
+  }
+
+  var cocok = samaNama.filter(function (d) {
+    return d.kunci.replace(/[^0-9]/g, '') === kunci;
+  });
+
+  if (!cocok.length) {
+    notif({ nada: 'awas', judul: 'Empat digit tidak cocok',
+      isi: 'Namamu ada di daftar, tetapi empat angka itu berbeda dari nomor '
+        + 'WhatsApp yang kamu daftarkan. Coba periksa lagi nomornya.',
+      aksi: [aksiWa()] });
+    goyang(el('digit'));
+    return;
+  }
+
+  if (cocok.length > 1) { pilihSalahSatu(cocok); return; }
+  tampilkan(cocok[0]);
 }
 
 function pilihSalahSatu(daftar) {
