@@ -839,69 +839,142 @@ el('tombolCari').addEventListener('pointerdown', function (e) {
 var simpanan = null;
 
 /**
- * Menyusun daftar alamat CSV dari apa pun yang ditempel ke SUMBER_SHEET.
- *
- * Diterima tiga bentuk:
- *   1. URL biasa spreadsheet  .../spreadsheets/d/{id}/edit#gid={gid}
- *   2. URL gviz atau apa pun yang sudah mengandung output=csv
- *   3. URL hasil "Publikasikan ke web"
- *
- * Untuk bentuk pertama dikembalikan dua alamat: gviz lebih dulu, lalu export
- * sebagai cadangan. Keduanya melayani berkas yang sama, tetapi ada jaringan
- * sekolah yang memblokir salah satunya.
+ * Membaca identitas spreadsheet dari apa pun yang ditempel ke SUMBER_SHEET.
+ * Menerima URL biasa dari bilah alamat, termasuk bagian #gid=... di belakangnya.
  */
-function alamatCsv() {
+function bacaSumber() {
   var s = String(SUMBER_SHEET || '').trim();
-  if (!s || s.indexOf('GANTI_DENGAN') === 0) return [];
-  if (s.indexOf('output=csv') >= 0 || s.indexOf('/gviz/') >= 0) return [s];
+  if (!s || s.indexOf('GANTI_DENGAN') === 0) return null;
+
+  // URL hasil "Publikasikan ke web" tetap didukung dan diambil lewat fetch biasa.
+  if (s.indexOf('output=csv') >= 0) return { csv: s };
 
   var id = (s.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || [])[1];
-  if (!id) return [];
+  if (!id) return null;
   var gid = (s.match(/[#?&]gid=([0-9]+)/) || [])[1] || '0';
-
-  var dasar = 'https://docs.google.com/spreadsheets/d/' + id;
-  return [
-    dasar + '/gviz/tq?tqx=out:csv&headers=1&gid=' + gid,
-    dasar + '/export?format=csv&gid=' + gid
-  ];
+  return { id: id, gid: gid };
 }
+
+/**
+ * Mengambil data lewat TAG SCRIPT, bukan fetch.
+ *
+ * Endpoint gviz milik Google mengalihkan permintaan ke googleusercontent.com yang
+ * tidak mengirim header izin lintas domain, sehingga fetch dari domain lain selalu
+ * diblokir browser. Tag script tidak tunduk pada aturan itu: Google mengembalikan
+ * JavaScript yang memanggil fungsi bernama, dan fungsi itu yang menerima datanya.
+ */
+function ambilLewatSkrip(id, gid) {
+  return new Promise(function (terima, tolak) {
+    var namaFungsi = '__psikogram' + Date.now();
+    var skrip = document.createElement('script');
+    var selesai = false;
+
+    function bersihkan() {
+      try { delete window[namaFungsi]; } catch (e) { window[namaFungsi] = undefined; }
+      if (skrip.parentNode) skrip.parentNode.removeChild(skrip);
+    }
+
+    var batas = setTimeout(function () {
+      if (selesai) return;
+      selesai = true;
+      bersihkan();
+      // Sheet yang belum boleh dibaca publik membalas halaman login, bukan JavaScript,
+      // sehingga fungsi penerima tidak pernah dipanggil dan kita berhenti di sini.
+      tolak(new Error('AKSES_DITOLAK'));
+    }, 15000);
+
+    window[namaFungsi] = function (jawaban) {
+      if (selesai) return;
+      selesai = true;
+      clearTimeout(batas);
+      bersihkan();
+      try { terima(dariGviz(jawaban)); }
+      catch (e) { tolak(e); }
+    };
+
+    skrip.onerror = function () {
+      if (selesai) return;
+      selesai = true;
+      clearTimeout(batas);
+      bersihkan();
+      tolak(new Error('AKSES_DITOLAK'));
+    };
+
+    skrip.src = 'https://docs.google.com/spreadsheets/d/' + id
+      + '/gviz/tq?tqx=out:json;responseHandler:' + namaFungsi
+      + '&headers=1&gid=' + gid + '&cb=' + Date.now();
+    document.head.appendChild(skrip);
+  });
+}
+
+/** Mengubah jawaban gviz menjadi daftar objek berkunci nama kolom. */
+function dariGviz(jawaban) {
+  if (!jawaban || !jawaban.table) throw new Error('KOSONG');
+
+  var kolom = (jawaban.table.cols || []).map(function (c) {
+    return String(c.label || c.id || '').trim().toLowerCase();
+  });
+  var baris = jawaban.table.rows || [];
+
+  // Kalau label kolom kosong, berarti baris judul ikut terbaca sebagai data.
+  if (!kolom.filter(Boolean).length && baris.length) {
+    kolom = (baris[0].c || []).map(function (sel) {
+      return sel && sel.v != null ? String(sel.v).trim().toLowerCase() : '';
+    });
+    baris = baris.slice(1);
+  }
+
+  var hasil = baris.map(function (r) {
+    var o = {};
+    kolom.forEach(function (h, i) {
+      if (!h) return;
+      var sel = r.c && r.c[i];
+      var nilai = sel ? (sel.f != null ? sel.f : sel.v) : null;
+      o[h] = nilai == null ? '' : String(nilai).trim();
+    });
+    return o;
+  }).filter(function (o) { return o.nama; });
+
+  if (!hasil.length) throw new Error('KOSONG');
+  return hasil;
+}
+
+/** Jalur cadangan untuk URL "Publikasikan ke web", yang memang ramah fetch. */
+function ambilLewatFetch(url) {
+  var pemisah = url.indexOf('?') >= 0 ? '&' : '?';
+  return fetch(url + pemisah + 'cb=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function (t) {
+      if (/^\s*</.test(t)) throw new Error('AKSES_DITOLAK');
+      var baris = bacaCsv(t);
+      if (baris.length < 2) throw new Error('KOSONG');
+      var judul = baris[0].map(function (h) { return String(h).trim().toLowerCase(); });
+      return baris.slice(1).map(function (r) {
+        var o = {};
+        judul.forEach(function (h, i) { o[h] = r[i] != null ? String(r[i]).trim() : ''; });
+        return o;
+      }).filter(function (o) { return o.nama; });
+    });
+}
+
+var simpanan = null;
 
 function ambilData() {
   if (simpanan) return Promise.resolve(simpanan);
 
-  var alamat = alamatCsv();
-  if (!alamat.length) return Promise.reject(new Error('BELUM_DISETEL'));
+  var sumber = bacaSumber();
+  if (!sumber) return Promise.reject(new Error('BELUM_DISETEL'));
 
-  var galatTerakhir = null;
+  var janji = sumber.csv
+    ? ambilLewatFetch(sumber.csv)
+    : ambilLewatSkrip(sumber.id, sumber.gid);
 
-  function coba(i) {
-    if (i >= alamat.length) throw (galatTerakhir || new Error('Tidak ada alamat yang bisa dipakai'));
-    var pemisah = alamat[i].indexOf('?') >= 0 ? '&' : '?';
-    return fetch(alamat[i] + pemisah + 'cb=' + Date.now(), { cache: 'no-store' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      })
-      .then(function (t) {
-        // Sheet yang belum boleh dibaca publik membalas halaman login, bukan CSV.
-        if (/^\s*</.test(t)) throw new Error('AKSES_DITOLAK');
-        return t;
-      })
-      .catch(function (e) {
-        galatTerakhir = e;
-        return coba(i + 1);
-      });
-  }
-
-  return coba(0).then(function (t) {
-    var baris = bacaCsv(t);
-    if (baris.length < 2) throw new Error('KOSONG');
-    var judul = baris[0].map(function (h) { return String(h).trim().toLowerCase(); });
-    simpanan = baris.slice(1).map(function (r) {
-      var o = {};
-      judul.forEach(function (h, i) { o[h] = r[i] != null ? String(r[i]).trim() : ''; });
-      return o;
-    });
+  return janji.then(function (data) {
+    if (!data.length) throw new Error('KOSONG');
+    simpanan = data;
     return simpanan;
   });
 }
