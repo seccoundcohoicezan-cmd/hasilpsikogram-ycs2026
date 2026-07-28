@@ -651,7 +651,7 @@
 <p class="kaki">
   &copy; 2026 Youth Character Summit &middot; Universitas STEKOM<br>
   Hasil tes ini bahan diskusi untuk wawancara, bukan penilaian akhir.<br>
-  <span class="cap" id="cap">v9</span>
+  <span class="cap" id="cap">v10</span>
 </p>
 
 <a class="wa" id="tombolWa" href="#" target="_blank" rel="noopener">
@@ -667,7 +667,8 @@
    ============================================================
    SHEET_ID     : ID spreadsheet PUBLIK, potongan panjang di antara /d/ dan /edit
                   pada URL-nya.
-   NAMA_SHEET   : nama tab di dalamnya. Harus persis, peka huruf besar-kecil.
+   NAMA_SHEET   : nama tab di dalamnya. Kalau namanya berbeda, halaman otomatis
+                  mencoba tab pertama lewat nomornya, jadi tidak perlu tepat.
    WA_ADMIN     : nomor admin untuk tombol bantuan, format 62xxx tanpa tanda plus.
    ============================================================ */
 /* Sumber data: sheet PUBLIK. Polanya sama persis dengan halaman cek sertifikat
@@ -675,12 +676,17 @@
    bukan gid, tanpa parameter tambahan apa pun. */
 var SHEET_ID   = '1_QqbgIeFuz9Tj6pMLz8o8I5Fxu7QvyIFMfktbmiTRhU';
 var NAMA_SHEET = 'PUBLIK';
-var CSV_URL    = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID
-               + '/gviz/tq?tqx=out:csv&sheet=' + NAMA_SHEET;
+var DASAR      = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:csv';
+var CSV_URL    = DASAR + '&sheet=' + NAMA_SHEET;
+
+/* Cadangan lewat nomor tab. Dipakai kalau pemanggilan dengan nama tab tidak
+   membuahkan hasil — nama tab di sisi Google peka huruf besar-kecil, sedangkan
+   nomor tab tidak pernah berubah. */
+var CSV_URL_GID = DASAR + '&gid=0';
 
 /* Penanda versi, tampil di kaki halaman. Berguna untuk memastikan berkas yang
    ter-deploy memang yang terbaru. */
-var VERSI = 'v9';
+var VERSI = 'v10';
 
 var WA_ADMIN   = '628888555591';
 var WA_PESAN   = 'Saya butuh bantuan cek hasil psikogram YCS 2026';
@@ -722,9 +728,16 @@ var bilah = {
   }
 };
 
+/**
+ * Menyeragamkan teks sebelum dibandingkan.
+ *
+ * Huruf besar-kecil, tanda baca, spasi berlebih, dan tanda diakritik semuanya
+ * diabaikan, sehingga "Fauzan  DAFFA." dan "fauzan daffa" dianggap sama.
+ */
 function normal(s) {
-  return String(s == null ? '' : s).toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  var t = String(s == null ? '' : s);
+  if (t.normalize) t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return t.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function bacaCsv(csv) {
@@ -861,13 +874,15 @@ el('tombolCari').addEventListener('pointerdown', function (e) {
  */
 var DATA = [];
 
-async function muatData() {
+async function ambilDari(url) {
   try {
-    var r = await fetch(CSV_URL);
+    var r = await fetch(url);
+    if (!r.ok) return null;
     var txt = await r.text();
+    if (/^\s*</.test(txt)) return null;              // halaman login, bukan CSV
     var baris = bacaCsv(txt).filter(function (x) { return x.join('').trim() !== ''; });
     baris.shift();                                   // buang baris judul
-    DATA = baris.map(function (b) {
+    return baris.map(function (b) {
       return {
         nama:    (b[0] || '').trim(),
         kunci:   (b[1] || '').trim(),
@@ -878,8 +893,18 @@ async function muatData() {
       };
     }).filter(function (d) { return d.nama; });
   } catch (e) {
-    DATA = null;
+    return null;
   }
+}
+
+async function muatData() {
+  var hasil = await ambilDari(CSV_URL);
+  if (!hasil || !hasil.length) {
+    var cadangan = await ambilDari(CSV_URL_GID);
+    if (cadangan && cadangan.length) hasil = cadangan;
+    else if (!hasil) hasil = cadangan;               // dua-duanya gagal -> null
+  }
+  DATA = hasil;
 }
 
 /**
@@ -935,9 +960,9 @@ function notifSumber(gagalKoneksi) {
                   tutupNotif(); DATA = []; await muatData(); cari();
                 } },
               aksiWa() ],
-      teknis: 'fetch ke ' + CSV_URL + ' gagal. Pastikan spreadsheet PUBLIK '
-        + 'disetel "Siapa saja yang memiliki link \u2192 Pelihat" dan nama tab-nya '
-        + 'persis "' + NAMA_SHEET + '".' });
+      teknis: 'Dua alamat gagal: ' + CSV_URL + ' dan ' + CSV_URL_GID
+        + '. Pastikan spreadsheet PUBLIK disetel "Siapa saja yang memiliki link '
+        + '\u2192 Pelihat".' });
   } else {
     notif({ nada: 'info', judul: 'Belum ada hasil',
       isi: 'Daftar hasil masih kosong. Biasanya berarti pengolahan datanya belum '
